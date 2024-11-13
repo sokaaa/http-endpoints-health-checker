@@ -1,72 +1,84 @@
+import asyncio
+import aiohttp
 import yaml
-import requests
 import time
 from urllib.parse import urlparse
+import logging
 
 # Function to parse YAML configuration file
 def parse_yaml_file(file_path):
     with open(file_path, 'r') as file:
         return yaml.safe_load(file)
 
-# Function to perform an HTTP request and determine if it is UP or DOWN
-def check_endpoint(endpoint):
+# Functions to perform an HTTP request and determine if it is UP or DOWN
+async def fetch(session, endpoint):
     url = endpoint['url']
-    method = endpoint.get('method', 'GET').upper()
-    headers = endpoint.get('headers', {})
-    body = endpoint.get('body', None)
+    method = endpoint.get('method', 'GET').upper() # Default to 'GET' if method is not specified
+    headers = endpoint.get('headers', {}) # Default to an empty dictionary if headers are not provided
+    body = endpoint.get('body', None) # Default to None if body is not provided
 
     try:
-        if method == 'GET':
-            response = requests.get(url, headers=headers, timeout=5)
-        elif method == 'POST':
-            response = requests.post(url, headers=headers, data=body, timeout=5)
-        else:
-            response = requests.request(method, url, headers=headers, data=body, timeout=5)
+        start_time = time.time()  # Start time before the request
+        async with session.request(method, url, headers=headers, data=body, timeout=5) as response:
+            end_time = time.time()  # End time after the request
+            latency = (end_time - start_time) * 1000  # Convert to milliseconds
+            is_up = response.status in range(200, 300) and latency < 500
+            return endpoint['name'], url, is_up, latency
+    except Exception as e:
+        logging.warning(f"Request failed for {url}: {e}")
+        return endpoint['name'], url, False, None
 
-        latency = response.elapsed.total_seconds() * 1000  # Convert to ms
-        is_up = response.status_code in range(200, 300) and latency < 500
-        return is_up
-
-    except requests.exceptions.RequestException:
-        return False
-
+async def check_endpoints(endpoints):
+    async with aiohttp.ClientSession() as session:
+        tasks = [fetch(session, endpoint) for endpoint in endpoints]
+        return await asyncio.gather(*tasks)
+    
 # Function to track and log availability percentages
 def log_availability(stats):
-    
     for domain, (successes, total) in stats.items():
         percentage = (successes / total) * 100 if total > 0 else 0
-        print(f"{domain} has {round(percentage)}% availability percentage")
+        logging.info(f"{domain} has {round(percentage)}% availability percentage")
 
 # Main function to run health checks in cycles
-def monitor_endpoints(file_path):
+async def monitor_endpoints(file_path):
     endpoints = parse_yaml_file(file_path)
     domain_stats = {}
+    logging.info("Starting endpoint monitoring... Press CTRL+C to stop.")
+    
+    try:
+        while True:
+            results = await check_endpoints(endpoints)
+            for name, url, is_up, latency in results:
+                domain = urlparse(url).netloc
 
-    while True:
-        for endpoint in endpoints:
-            url = endpoint['url']
-            domain = urlparse(url).netloc
-            is_up = check_endpoint(endpoint)
+                # Initialize stats if first time encountering domain
+                if domain not in domain_stats:
+                    domain_stats[domain] = [0, 0]  # [successes, total checks]
 
-            # Initialize stats if first time encountering domain
-            if domain not in domain_stats:
-                domain_stats[domain] = [0, 0]  # [successes, total checks]
+                # Update stats
+                domain_stats[domain][1] += 1  # Increment total checks
+                if is_up:
+                    domain_stats[domain][0] += 1  # Increment successes
 
-            # Update stats
-            domain_stats[domain][1] += 1  # Increment total checks
-            if is_up:
-                domain_stats[domain][0] += 1  # Increment successes
+                # Log individual endpoint status
+                status = "UP" if is_up else "DOWN"
+                latency_str = f"{latency:.2f} ms" if latency is not None else "N/A"
+                logging.info(f"{name} ({url}) is {status}, latency: {latency_str}")
 
-        # Log availability after each cycle
-        log_availability(domain_stats)
-        
-        # Wait for 15 seconds before the next cycle
-        time.sleep(15)
+            # Log the availability after each cycle
+            log_availability(domain_stats)
+
+            # Wait for 15 seconds before the next cycle
+            await asyncio.sleep(15)
+
+    except KeyboardInterrupt:
+        logging.info("Monitoring stopped by user. Exiting...")
 
 # Run the program
 if __name__ == "__main__":
     import sys
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
     if len(sys.argv) != 2:
-        print("Usage: python3 monitor.py <path_to_yaml_file>")
-    else:
-        monitor_endpoints(sys.argv[1])
+        logging.error("Usage: python3 monitor.py <path_to_yaml_file>")
+        sys.exit(1)
+    asyncio.run(monitor_endpoints(sys.argv[1]))
