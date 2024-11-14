@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: .
+    container_name: health-checker-app
+    command: python3 monitor.py /app/config.yaml
+    volumes:
+      - .:/app
+      - ${CONFIG_PATH}:/app/config.yaml # Map the host config file dynamically
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  tests:
+    build:
+      context: .
+    container_name: health-checker-tests
+    command: pytest --maxfail=5 --disable-warnings -q
+    entrypoint: ""
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1

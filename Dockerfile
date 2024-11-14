@@ -15,4 +15,4 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 
 # Default command to run the Python script, argument will be passed at runtime
-ENTRYPOINT ["python3", "monitor.py"]
+ENTRYPOINT ["sh", "-c", "python3 monitor.py /app/config.yaml"]

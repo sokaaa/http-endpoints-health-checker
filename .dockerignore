@@ -3,5 +3,3 @@ __pycache__/
 *.pyo
 *.pyd
 *.log
-tests/
-config.yaml
