@@ -130,13 +130,17 @@ These steps will guide you through the process of installing Docker and setting 
 
 ## Installation and Setup
 
-### 1. Clone the Repository
+### 1. Important Note for Windows and macOS Users
+- Ensure **Docker Desktop** is running.
+- If on **Windows (WSL)**, open your IDE from within the WSL environment.
+
+### 2. Clone the Repository
 ```bash
 git clone https://github.com/sokaaa/http-endpoints-health-checker.git
 cd http-endpoints-health-checker
 ```
 
-### 2. Prepare Your Configuration
+### 3. Prepare Your Configuration
 
 1. **Create or Use Your YAML Configuration File**:
    - Prepare a YAML file that specifies the HTTP endpoints to be monitored. Save this file in a location on your local system (e.g., `/path/to/your/config.yaml`).
@@ -178,13 +182,13 @@ cd http-endpoints-health-checker
 CONFIG_PATH=/home/reviewer/myconfig/config.yaml
 ```
 
-### 3. Run the Program
+### 4. Run the Program
 Once the `.env` file is set, run the following command to build and start the container:
 ```bash
 docker-compose up app
 ```
 
-### 4. Running Unit Tests
+### 5. Running Unit Tests
 To run the unit tests, use the following command:
 ```bash
 docker-compose run --rm tests
